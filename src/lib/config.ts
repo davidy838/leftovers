@@ -13,6 +13,25 @@ export function aiModel(): string {
   return process.env.ANTHROPIC_MODEL?.trim() || DEFAULT_MODEL;
 }
 
+const DISCORD_HOSTS = new Set(["discord.com", "discordapp.com", "ptb.discord.com", "canary.discord.com"]);
+
+/**
+ * Discord webhook for new-post announcements, or null when unset/invalid.
+ * Only https Discord webhook URLs are accepted so a typo can't make the server POST elsewhere.
+ */
+export function discordWebhookUrl(): string | null {
+  const raw = process.env.DISCORD_WEBHOOK_URL?.trim();
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    if (u.protocol === "https:" && DISCORD_HOSTS.has(u.hostname) && u.pathname.startsWith("/api/webhooks/")) return u.toString();
+  } catch {
+    /* fall through */
+  }
+  console.warn("[discord] DISCORD_WEBHOOK_URL is not a Discord webhook URL; announcements are off");
+  return null;
+}
+
 export function supabaseServerConfig(): { url: string; serviceRoleKey: string } | null {
   const url = process.env.SUPABASE_URL?.trim();
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();

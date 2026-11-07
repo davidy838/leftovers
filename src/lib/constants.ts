@@ -44,5 +44,8 @@ export const RATE_LIMITS = {
 export const KG_FOOD_PER_SERVING = 0.4;
 export const KG_CO2E_PER_KG_FOOD = 2.5;
 
+/** Give up on the Discord webhook after this long (it runs after the response, but don't hang). */
+export const DISCORD_TIMEOUT_MS = 4_000;
+
 export const CAMPUS_TIMEZONE = "America/Vancouver";
 export const CAMPUS_CENTER: [number, number] = [49.2648, -123.2518];

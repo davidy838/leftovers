@@ -1,4 +1,6 @@
-import { connection } from "next/server";
+import { after, connection } from "next/server";
+import { discordWebhookUrl } from "@/lib/config";
+import { notifyDiscord } from "@/lib/discord.server";
 import { getClientId, jsonError, readJson, zodError } from "@/lib/http";
 import { enforceRateLimit } from "@/lib/limits";
 import { createPostFromRequest, CreatePostError } from "@/lib/posts.server";
@@ -36,6 +38,13 @@ export async function POST(req: Request) {
   try {
     const store = getStore();
     const post = await createPostFromRequest(store, parsed.data, clientId);
+    // Announce on Discord once the response is sent. notifyDiscord never throws, so a
+    // slow or broken webhook can't delay or fail the post.
+    const webhookUrl = discordWebhookUrl();
+    if (webhookUrl) {
+      const origin = new URL(req.url).origin;
+      after(() => notifyDiscord(post, { webhookUrl, origin }));
+    }
     return Response.json({ post: toPublic(post, new Set([post.id])) }, { status: 201 });
   } catch (err) {
     if (err instanceof CreatePostError) return jsonError(400, err.code, err.message);
