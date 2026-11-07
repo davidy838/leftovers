@@ -91,7 +91,10 @@ export class SupabaseStore implements PostStore {
   async listPosts(): Promise<Post[]> {
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const rows = check(
-      await this.db.from("posts").select("*").neq("status", "removed").gt("expires_at", cutoff).limit(500),
+      await this.db.from("posts").select("*").neq("status", "removed").gt("expires_at", cutoff)
+        // Newest-ending first so the limit drops old expired posts, never live ones.
+        .order("expires_at", { ascending: false })
+        .limit(500),
       "listPosts",
     ) as PostRow[];
     return rows.map(rowToPost);

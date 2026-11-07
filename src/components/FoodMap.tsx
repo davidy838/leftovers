@@ -2,7 +2,7 @@
 // Leaflet must only run in the browser; import this via MapView (next/dynamic, ssr: false).
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import { getBuilding } from "@/lib/buildings";
 import { CAMPUS_CENTER } from "@/lib/constants";
@@ -36,11 +36,22 @@ function positions(posts: PublicPost[]): Map<string, [number, number]> {
   return out;
 }
 
-function FlyTo({ target }: { target: [number, number] | null }) {
+/**
+ * Fly to the selected post once per selection. Keyed on the id (not the coordinates array,
+ * which is rebuilt on every 5 s poll) so the map doesn't snap back while the user pans.
+ */
+function FlyTo({ selectedId, target }: { selectedId: string | null; target: [number, number] | null }) {
   const map = useMap();
+  const flownFor = useRef<string | null>(null);
   useEffect(() => {
-    if (target) map.flyTo(target, Math.max(map.getZoom(), 17), { duration: 0.6 });
-  }, [map, target]);
+    if (!selectedId) {
+      flownFor.current = null;
+      return;
+    }
+    if (!target || flownFor.current === selectedId) return;
+    flownFor.current = selectedId;
+    map.flyTo(target, Math.max(map.getZoom(), 17), { duration: 0.6 });
+  }, [map, selectedId, target]);
   return null;
 }
 
@@ -68,7 +79,7 @@ export default function FoodMap({
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      <FlyTo target={target} />
+      <FlyTo selectedId={selectedId} target={target} />
       {me && <Marker position={[me.lat, me.lng]} icon={meIcon} />}
       {posts.map((p) => {
         const at = pos.get(p.id);
