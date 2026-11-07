@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AiTransparency } from "@/components/AiTransparency";
+import { KG_CO2E_PER_KG_FOOD, KG_FOOD_PER_SERVING } from "@/lib/constants";
 
 export const metadata: Metadata = { title: "How it works · Leftovers" };
 
@@ -33,6 +34,17 @@ export default function AboutPage() {
           <li>We log which suggestions people correct and test our prompts against hand-labelled images.</li>
         </ul>
         <AiTransparency />
+      </section>
+
+      <section id="impact" className="scroll-mt-20">
+        <h2 className="text-xl font-semibold">How we count impact</h2>
+        <p className="mt-2">
+          When a post is marked gone, its servings count as claimed. We convert that to weight at about{" "}
+          <strong>{KG_FOOD_PER_SERVING} kg per serving</strong>, and to emissions at about{" "}
+          <strong>{KG_CO2E_PER_KG_FOOD} kg CO₂e per kg</strong> of food that would otherwise be wasted (a round
+          lifecycle average from FAO and WRAP estimates). These are deliberately rough, conservative numbers, shown so
+          the effect is visible, not as an audit.
+        </p>
       </section>
 
       <section className="rounded-2xl bg-warn-soft p-4 text-sm text-warn">

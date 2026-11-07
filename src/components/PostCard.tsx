@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { getBuilding } from "@/lib/buildings";
 import { ApiError } from "@/lib/client/api";
+import { rememberSignal, sentSignals } from "@/lib/client/deviceStore";
 import { foodEmoji } from "@/lib/emoji";
 import { ALLERGEN_LABELS, DIETARY_LABELS } from "@/lib/labels";
 import { formatCampusTime } from "@/lib/time";
@@ -22,17 +23,35 @@ export function PostCard({
   onSignal: (id: string, type: SignalType) => Promise<unknown>;
 }) {
   const [busy, setBusy] = useState<SignalType | null>(null);
-  const [done, setDone] = useState<SignalType[]>([]);
+  // Cards only render client-side (after the feed fetch), so reading localStorage here is safe.
+  const [done, setDone] = useState<SignalType[]>(() => sentSignals(post.id));
   const [msg, setMsg] = useState<string | null>(null);
   const building = getBuilding(post.buildingId);
   const live = post.displayStatus === "live";
+
+  async function share() {
+    const url = `${window.location.origin}/?post=${post.id}`;
+    const text = `Free food: ${post.title} at ${building?.name ?? post.buildingId}${post.room ? `, ${post.room}` : ""}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: post.title, text, url });
+        return;
+      }
+      await navigator.clipboard.writeText(`${text} ${url}`);
+      setMsg("Link copied. Paste it in your group chat!");
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return; // user closed the share sheet
+      setMsg(`Copy this link: ${url}`);
+    }
+  }
 
   async function send(type: SignalType) {
     setBusy(type);
     setMsg(null);
     try {
       await onSignal(post.id, type);
-      setDone((d) => [...d, type]);
+      rememberSignal(post.id, type);
+      setDone((d) => (d.includes(type) ? d : [...d, type]));
       if (type === "gone") setMsg(post.isMine ? "Marked as gone. Thanks for sharing!" : "Thanks! We'll end it once someone else confirms.");
     } catch (e) {
       setMsg(e instanceof ApiError ? e.message : "Something went wrong");
@@ -96,8 +115,9 @@ export function PostCard({
             ⚠️ May contain: {post.allergens.map((a) => ALLERGEN_LABELS[a]).join(", ")}. Check with the organiser if you have allergies.
           </p>
         )}
+        <div className="mt-1 flex flex-wrap gap-2">
         {live && (
-          <div className="mt-1 flex flex-wrap gap-2">
+          <>
             {!post.isMine && (
               <button
                 type="button"
@@ -116,8 +136,12 @@ export function PostCard({
             >
               {busy === "gone" ? "…" : post.isMine ? "Mark as gone" : done.includes("gone") ? "Reported ✓" : "It's gone"}
             </button>
-          </div>
+          </>
         )}
+          <button type="button" onClick={share} className="rounded-full border border-line px-4 py-2 text-sm" aria-label={`Share ${post.title}`}>
+            Share
+          </button>
+        </div>
         {msg && <p className="text-xs text-muted" role="status">{msg}</p>}
       </div>
     </article>

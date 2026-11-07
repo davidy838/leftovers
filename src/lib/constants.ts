@@ -36,5 +36,13 @@ export const RATE_LIMITS = {
   signal: 60,
 } as const;
 
+/**
+ * Impact estimates (docs/LLD.md §5). Deliberately conservative round numbers:
+ * ~0.4 kg per meal-sized serving, and ~2.5 kg CO2e per kg of food that would otherwise
+ * be wasted (production + disposal, in line with FAO/WRAP lifecycle averages).
+ */
+export const KG_FOOD_PER_SERVING = 0.4;
+export const KG_CO2E_PER_KG_FOOD = 2.5;
+
 export const CAMPUS_TIMEZONE = "America/Vancouver";
 export const CAMPUS_CENTER: [number, number] = [49.2648, -123.2518];
