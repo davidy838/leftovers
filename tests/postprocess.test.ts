@@ -3,6 +3,11 @@ import { mockFood, mockPoster } from "@/lib/ai/mock";
 import { ExtractRejected, postprocessFood, postprocessPoster } from "@/lib/ai/postprocess";
 import type { RawFood, RawPoster } from "@/lib/ai/schemas";
 import { RawFoodSchema, RawPosterSchema } from "@/lib/ai/schemas";
+import { toCampusLocalInput } from "@/lib/time";
+
+const H = 3_600_000;
+const local = (iso: string | null) => (iso ? toCampusLocalInput(iso) : null);
+const hoursBetween = (a: string | null, b: string | null) => (Date.parse(b!) - Date.parse(a!)) / H;
 
 const food = (over: Partial<RawFood> = {}): RawFood => ({
   is_food: true,
@@ -66,8 +71,8 @@ describe("postprocessPoster", () => {
   it("maps location to a known building and converts times to UTC", () => {
     const s = postprocessPoster(poster());
     expect(s.buildingId).toBe("ICCS");
-    expect(s.availableFrom).toBe("2026-11-13T02:00:00.000Z");
-    expect(s.expiresAt).toBe("2026-11-13T04:30:00.000Z"); // end + 30 min
+    expect(local(s.availableFrom)).toBe("2026-11-12T18:00"); // Vancouver wall clock
+    expect(hoursBetween(s.availableFrom, s.expiresAt)).toBe(2.5); // end (20:00) + 30 min
   });
   it("never invents a building", () => {
     const s = postprocessPoster(poster({ location_text: "Zoom" }));
@@ -75,10 +80,12 @@ describe("postprocessPoster", () => {
     expect(s.locationText).toBe("Zoom");
   });
   it("defaults to start + 2h without an end time", () => {
-    expect(postprocessPoster(poster({ end_time: null })).expiresAt).toBe("2026-11-13T04:00:00.000Z");
+    const s = postprocessPoster(poster({ end_time: null }));
+    expect(hoursBetween(s.availableFrom, s.expiresAt)).toBe(2);
   });
   it("ignores an end before the start", () => {
-    expect(postprocessPoster(poster({ end_time: "17:00" })).expiresAt).toBe("2026-11-13T04:00:00.000Z");
+    const s = postprocessPoster(poster({ end_time: "17:00" }));
+    expect(hoursBetween(s.availableFrom, s.expiresAt)).toBe(2);
   });
   it("leaves times null when the date is missing or invalid", () => {
     expect(postprocessPoster(poster({ date: null })).availableFrom).toBeNull();

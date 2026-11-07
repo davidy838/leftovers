@@ -1,16 +1,28 @@
 import { describe, expect, it } from "vitest";
 import { campusToday, formatDuration, fromCampusLocalInput, toCampusLocalInput, zonedToUtc } from "@/lib/time";
 
+// NOTE: B.C. moved to permanent daylight time, and newer tz databases (e.g. CI's Node) give
+// Vancouver UTC-7 in November 2026 while older ones give UTC-8. So these tests check the real
+// property — the wall-clock time in Vancouver round-trips — instead of hard-coding an offset.
+const HOUR = 3_600_000;
+const offsetHours = (date: string, time: string) =>
+  (Date.parse(`${date}T${time}:00Z`) - zonedToUtc(date, time)!.getTime()) / HOUR;
+
 describe("zonedToUtc (America/Vancouver)", () => {
-  it("handles PST (UTC-8) after the November DST change", () => {
-    expect(zonedToUtc("2026-11-08", "18:30")?.toISOString()).toBe("2026-11-09T02:30:00.000Z");
+  it.each([
+    ["2026-11-08", "18:30"],
+    ["2026-07-01", "09:00"],
+    ["2026-11-01", "12:00"],
+    ["2026-01-15", "00:05"],
+    ["2026-12-31", "23:59"],
+  ])("%s %s round-trips through Vancouver wall-clock time", (date, time) => {
+    const utc = zonedToUtc(date, time);
+    expect(utc).not.toBeNull();
+    expect(toCampusLocalInput(utc!.toISOString())).toBe(`${date}T${time}`);
+    expect([-7, -8]).toContain(offsetHours(date, time));
   });
-  it("handles PDT (UTC-7) in summer", () => {
+  it("summer is UTC-7", () => {
     expect(zonedToUtc("2026-07-01", "09:00")?.toISOString()).toBe("2026-07-01T16:00:00.000Z");
-  });
-  it("handles the day of the fall-back change", () => {
-    // 2026-11-01 01:30 is ambiguous; 12:00 is unambiguous PST
-    expect(zonedToUtc("2026-11-01", "12:00")?.toISOString()).toBe("2026-11-01T20:00:00.000Z");
   });
   it("rejects malformed input", () => {
     expect(zonedToUtc("2026-02-30", "10:00")).toBeNull();
@@ -23,10 +35,10 @@ describe("zonedToUtc (America/Vancouver)", () => {
 
 describe("campus local input round-trip", () => {
   it("round-trips", () => {
-    const iso = "2026-11-09T02:30:00.000Z";
-    const local = toCampusLocalInput(iso);
-    expect(local).toBe("2026-11-08T18:30");
-    expect(fromCampusLocalInput(local)).toBe(iso);
+    const local = "2026-11-08T18:30";
+    const iso = fromCampusLocalInput(local);
+    expect(iso).not.toBeNull();
+    expect(toCampusLocalInput(iso!)).toBe(local);
   });
   it("rejects junk", () => expect(fromCampusLocalInput("nope")).toBeNull());
 });
