@@ -6,6 +6,7 @@ import { api, ApiError } from "@/lib/client/api";
 import { prepareImage } from "@/lib/client/image";
 import { DEFAULT_DURATION_MINUTES, DURATION_CHOICES } from "@/lib/constants";
 import { ALLERGEN_LABELS, DIETARY_LABELS } from "@/lib/labels";
+import { RequestSeq } from "@/lib/requestSeq";
 import { fromCampusLocalInput, toCampusLocalInput } from "@/lib/time";
 import {
   ALLERGENS,
@@ -40,6 +41,7 @@ function AiBadge({ on }: { on: boolean }) {
 export function PostForm() {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
+  const extractSeq = useRef(new RequestSeq());
   const [mode, setMode] = useState<PostSource>("photo");
   const [image, setImage] = useState<{ input: ImageInput; previewUrl: string } | null>(null);
   const [ai, setAi] = useState<{ state: "idle" | "loading" | "done" | "error"; message?: string; kind?: "live" | "mock"; lowConfidence?: boolean }>({ state: "idle" });
@@ -69,6 +71,7 @@ export function PostForm() {
     });
 
   function switchMode(m: PostSource) {
+    extractSeq.current.invalidate(); // drop any AI result still in flight for the old mode
     setMode(m);
     setImage(null);
     setAi({ state: "idle" });
@@ -115,22 +118,30 @@ export function PostForm() {
 
   async function onFile(file: File | undefined) {
     if (!file) return;
+    // A later file pick or a mode switch makes this request stale; its result must not
+    // overwrite the form (or link the wrong AI run to the post).
+    const ticket = extractSeq.current.next();
     setError(null);
     setAi({ state: "loading" });
+    setRunId(null);
     let prepared;
     try {
       prepared = await prepareImage(file);
+      if (!extractSeq.current.isCurrent(ticket)) return;
       setImage(prepared);
     } catch (e) {
+      if (!extractSeq.current.isCurrent(ticket)) return;
       setAi({ state: "error", message: e instanceof Error ? e.message : "Couldn't read that image" });
       return;
     }
     try {
       const res = await api.extract(mode === "poster" ? "poster" : "food", prepared.input);
+      if (!extractSeq.current.isCurrent(ticket)) return;
       setRunId(res.runId);
       applySuggestion(res.suggestion);
       setAi({ state: "done", kind: res.ai, lowConfidence: res.suggestion.lowConfidence });
     } catch (e) {
+      if (!extractSeq.current.isCurrent(ticket)) return;
       setRunId(null);
       setAi({ state: "error", message: e instanceof ApiError ? e.message : "AI couldn't read that. Please fill in the form." });
     }

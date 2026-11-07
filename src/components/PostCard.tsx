@@ -114,7 +114,7 @@ export function PostCard({
               onClick={() => send("gone")}
               className="rounded-full border border-line px-4 py-2 text-sm disabled:opacity-50"
             >
-              {post.isMine ? "Mark as gone" : done.includes("gone") ? "Reported ✓" : busy === "gone" ? "…" : "It's gone"}
+              {busy === "gone" ? "…" : post.isMine ? "Mark as gone" : done.includes("gone") ? "Reported ✓" : "It's gone"}
             </button>
           </div>
         )}

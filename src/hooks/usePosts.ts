@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { api, ApiError } from "@/lib/client/api";
 import { POLL_INTERVAL_MS } from "@/lib/constants";
+import { RequestSeq } from "@/lib/requestSeq";
 import type { PublicPost, SignalType } from "@/lib/types";
 
 /** Feed data: polling + refetch on focus + optional Supabase realtime "ping" (docs/LLD.md §2). */
@@ -11,12 +12,17 @@ export function usePosts() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const inflight = useRef(false);
+  // Bumped whenever a signal response updates `posts`, so a poll that started earlier
+  // can't overwrite it with stale data.
+  const version = useRef(new RequestSeq());
 
   const refresh = useCallback(async () => {
     if (inflight.current) return;
     inflight.current = true;
+    const startedAt = version.current.peek();
     try {
       const data = await api.listPosts();
+      if (version.current.peek() !== startedAt) return; // a newer signal result already landed
       setPosts(data.posts);
       setError(null);
     } catch (e) {
@@ -61,6 +67,7 @@ export function usePosts() {
   const sendSignal = useCallback(
     async (id: string, type: SignalType) => {
       const { post } = await api.signal(id, type);
+      version.current.invalidate();
       setPosts((prev) =>
         post.displayStatus === "live" || post.displayStatus === "upcoming"
           ? prev.map((p) => (p.id === id ? post : p))
