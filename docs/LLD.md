@@ -53,6 +53,7 @@ Every AI suggestion is **reviewed by a human before it is published**, locations
  │     ├─ MemoryStore   (default; JSON file in .data/, photos on disk) │
  │     └─ SupabaseStore (if SUPABASE_URL + SERVICE_ROLE_KEY set)       │
  │  lib/ai     ──► extract(mode, image) → Claude or deterministic mock │
+ │  lib/discord.server ──► after(): new-post webhook (optional)        │
  └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -103,6 +104,7 @@ src/
     geo.ts           # haversine distance
     http.ts          # json helpers, error responses, client id, IP
     rateLimit.ts     # in-memory sliding window
+    discord.server.ts # new-post Discord webhook message + best-effort send
     edits.ts         # diff AI suggestion vs submitted post
     image.server.ts  # base64 decode + magic-byte check
     client/          # browser-only helpers (clientId, image resize, api)
@@ -197,6 +199,7 @@ Owner identity is **not** a column on `Post`. It lives in a separate `post_owner
 | **Stats** | `postsShared` = all non-removed posts; `servingsClaimed` = Σ `estServings` of posts that ended as `gone` (null counts 0); AI: `runs`, `runsUsed` (linked to a post), `runsEdited` (used with ≥ 1 edited field), `fieldEditRate`. |
 | **Impact estimate** (`lib/impact.ts`, client-side) | `kgFood = servingsClaimed × KG_FOOD_PER_SERVING (0.4)`, `kgCo2e = kgFood × KG_CO2E_PER_KG_FOOD (2.5)`. Shown in the feed banner and explained on `/about#impact`. Rough, conservative, labelled "≈". |
 | **Food alerts** (`lib/alerts.ts`, client-side) | Opt-in per device. After the first load, a post triggers an alert if it is new to this tab, not the viewer's own, `live`/`upcoming`, and has every selected dietary tag. Shown as an in-page banner + `(n)` in the tab title; a system `Notification` too when permitted and the tab is hidden. Only while the page is open (no push server). |
+| **Discord announcement** | When `DISCORD_WEBHOOK_URL` is set (and is an `https://discord.com/api/webhooks/…` URL), every successfully **saved** post is announced from `after()` in `POST /api/posts`, i.e. after the response is sent. One line: `<emoji> <title> · <short building> <room> · ~<servings> servings · [starts <time> ·] ends <time> · <link>`. Room, servings and `starts` are omitted when absent/not upcoming; times are campus-zoned (`7:45pm`, or `Sat 7:45pm` on another day); the link is `/?post=<id>` wrapped in `<…>` so Discord doesn't unfurl it. `allowed_mentions: { parse: [] }` so a title can't ping `@everyone`. **Best effort:** 4 s timeout (`DISCORD_TIMEOUT_MS`), any error or non-2xx is logged and ignored. It can never fail or delay the request. Seeded posts (`npm run seed`) are not announced. |
 | **Rate limits** (per IP, sliding 10 min) | create post 8, AI extract 20, signals 60. Exceeded → 429 with `retryAfterSec`. |
 | **Images** | client resizes to max 1280 px JPEG q=0.8; server accepts jpeg/png/webp ≤ 3 MB decoded and verifies magic bytes. |
 
@@ -377,6 +380,7 @@ Accessibility: every control is a real `<button>`/`<input>` with a label, colour
 | `ANTHROPIC_MODEL` | server | Default `claude-opus-5-5` |
 | `SUPABASE_URL` | server | Enables SupabaseStore (with the key below) |
 | `SUPABASE_SERVICE_ROLE_KEY` | server | **Never expose to the client** |
+| `DISCORD_WEBHOOK_URL` | server | Optional. Announce new posts in a Discord channel (§5). **Never `NEXT_PUBLIC_`**: the URL lets anyone post to the channel |
 | `NEXT_PUBLIC_SUPABASE_URL` | client | Realtime ping (optional) |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | client | Realtime ping (optional) |
 
@@ -384,7 +388,8 @@ Accessibility: every control is a real `<button>`/`<input>` with a label, colour
 
 ## 11. Security & safety
 
-- Service-role key and Anthropic key are server-only (no `NEXT_PUBLIC_` prefix).
+- Service-role key, Anthropic key and Discord webhook URL are server-only (no `NEXT_PUBLIC_` prefix).
+- The Discord webhook URL is validated as an `https` Discord webhook before use, and announcements disable all mentions.
 - All input is zod-validated, and the server ignores client-sent `photoUrl`, counts and status.
 - The owner table is separate, so client ids never appear in responses.
 - Rate limiting per IP. Note: it's in-memory, so it is per-instance on serverless and therefore best-effort.
@@ -406,4 +411,4 @@ Accessibility: every control is a real `<button>`/`<input>` with a label, colour
 
 ## 13. Future work (not in MVP)
 
-Discord bot alerts · club accounts & scheduled leftovers · moderation/report button · campus SSO · multi-campus `campus_id` · PWA push · photo blurring of faces.
+Two-way Discord bot (per-channel dietary filters, "gone" from Discord; one-way webhook announcements already exist, §5) · club accounts & scheduled leftovers · moderation/report button · campus SSO · multi-campus `campus_id` · PWA push · photo blurring of faces.
