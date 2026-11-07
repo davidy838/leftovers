@@ -1,4 +1,5 @@
 "use client";
+import type { AlertPermission } from "@/hooks/useFoodAlerts";
 import { DIETARY_LABELS } from "@/lib/labels";
 import { DIETARY_TAGS, type DietaryTag } from "@/lib/types";
 
@@ -13,11 +14,13 @@ export function FilterBar({
   onChange,
   locating,
   locationError,
+  alerts,
 }: {
   filters: Filters;
   onChange: (f: Filters) => void;
   locating: boolean;
   locationError: string | null;
+  alerts: { enabled: boolean; permission: AlertPermission; onToggle: () => void };
 }) {
   const toggleTag = (t: DietaryTag) =>
     onChange({
@@ -51,7 +54,26 @@ export function FilterBar({
         >
           {locating ? "Finding you…" : "📍 Nearest first"}
         </button>
+        <button
+          type="button"
+          aria-pressed={alerts.enabled}
+          className={chip(alerts.enabled)}
+          onClick={alerts.onToggle}
+          title={
+            filters.tags.length
+              ? "Get an alert when new food matching your dietary filters is posted"
+              : "Get an alert when new food is posted"
+          }
+        >
+          {alerts.enabled ? "🔔 Alerts on" : "🔕 Alert me"}
+        </button>
         {locationError && <span className="text-xs text-warn">{locationError}</span>}
+        {alerts.enabled && (
+          <span className="text-xs text-muted">
+            {filters.tags.length ? "For food matching your filters" : "For any new food"}, while this page is open
+            {alerts.permission === "denied" ? " (notifications are blocked, so we'll show them here)" : ""}.
+          </span>
+        )}
       </div>
     </div>
   );

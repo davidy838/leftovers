@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useFoodAlerts } from "@/hooks/useFoodAlerts";
 import { usePosts } from "@/hooks/usePosts";
 import { getBuilding } from "@/lib/buildings";
 import { haversineMeters, walkMinutes } from "@/lib/geo";
@@ -18,6 +19,27 @@ export function FoodFeed() {
   const [me, setMe] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const alerts = useFoodAlerts(posts, !loading, filters.tags);
+  const deepLinked = useRef(false);
+
+  // Shared links look like /?post=<id>: open that post once the feed has loaded.
+  useEffect(() => {
+    if (loading || deepLinked.current) return;
+    deepLinked.current = true;
+    const id = new URLSearchParams(window.location.search).get("post");
+    if (!id || !posts.some((p) => p.id === id)) return;
+    const t = window.setTimeout(() => {
+      setSelectedId(id);
+      setView("list");
+    }, 0);
+    // Once the list is showing, jump to the post. Instant, not smooth: a smooth scroll
+    // during page load gets interrupted (and doesn't run at all in a background tab).
+    const s = window.setTimeout(() => document.getElementById(`post-${id}`)?.scrollIntoView({ block: "center" }), 50);
+    return () => {
+      window.clearTimeout(t);
+      window.clearTimeout(s);
+    };
+  }, [loading, posts]);
 
   function locate() {
     if (!("geolocation" in navigator)) {
@@ -77,7 +99,36 @@ export function FoodFeed() {
         <ImpactBanner />
       </section>
 
-      <FilterBar filters={filters} onChange={changeFilters} locating={locating} locationError={locationError} />
+      <FilterBar
+        filters={filters}
+        onChange={changeFilters}
+        locating={locating}
+        locationError={locationError}
+        alerts={{ enabled: alerts.enabled, permission: alerts.permission, onToggle: () => void alerts.toggle() }}
+      />
+
+      {alerts.fresh.length > 0 && (
+        <div role="status" className="flex flex-wrap items-center gap-2 rounded-2xl border border-brand bg-brand-soft px-4 py-3 text-sm">
+          <span aria-hidden>🔔</span>
+          <span className="font-medium">New food:</span>
+          {alerts.fresh.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className="rounded-full bg-surface px-3 py-1 underline-offset-2 hover:underline"
+              onClick={() => {
+                setView("list");
+                select(p.id);
+              }}
+            >
+              {p.title}
+            </button>
+          ))}
+          <button type="button" className="ml-auto text-muted hover:text-fg" onClick={alerts.dismiss}>
+            Dismiss
+          </button>
+        </div>
+      )}
 
       <div className="flex gap-2 md:hidden" role="tablist" aria-label="View">
         {(["list", "map"] as const).map((v) => (

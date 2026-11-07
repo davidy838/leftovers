@@ -195,6 +195,8 @@ Owner identity is **not** a column on `Post`. It lives in a separate `post_owner
 | **Signals on non-live posts** | 409 `post_not_live`. |
 | **Durations** | "Leftovers now" default 45 min, choices 15/30/45/60/90/120. Poster posts default to the event end + 30 min, or start + 2 h if no end. |
 | **Stats** | `postsShared` = all non-removed posts; `servingsClaimed` = Σ `estServings` of posts that ended as `gone` (null counts 0); AI: `runs`, `runsUsed` (linked to a post), `runsEdited` (used with ≥ 1 edited field), `fieldEditRate`. |
+| **Impact estimate** (`lib/impact.ts`, client-side) | `kgFood = servingsClaimed × KG_FOOD_PER_SERVING (0.4)`, `kgCo2e = kgFood × KG_CO2E_PER_KG_FOOD (2.5)`. Shown in the feed banner and explained on `/about#impact`. Rough, conservative, labelled "≈". |
+| **Food alerts** (`lib/alerts.ts`, client-side) | Opt-in per device. After the first load, a post triggers an alert if it is new to this tab, not the viewer's own, `live`/`upcoming`, and has every selected dietary tag. Shown as an in-page banner + `(n)` in the tab title; a system `Notification` too when permitted and the tab is hidden. Only while the page is open (no push server). |
 | **Rate limits** (per IP, sliding 10 min) | create post 8, AI extract 20, signals 60. Exceeded → 429 with `retryAfterSec`. |
 | **Images** | client resizes to max 1280 px JPEG q=0.8; server accepts jpeg/png/webp ≤ 3 MB decoded and verifies magic bytes. |
 
@@ -352,13 +354,15 @@ Tables: `posts`, `post_owners(post_id, client_id)`, `signals(post_id, client_id,
 
 | Component | Responsibility |
 |---|---|
-| `FoodFeed` | Owns filters + view state; renders `MapView`, `PostList`, `FilterBar`, `ImpactBanner` |
-| `MapView` → `FoodMap` | `next/dynamic({ ssr:false })` wrapper around Leaflet; emoji markers; popup with title + countdown; selecting a marker highlights the card |
-| `PostCard` | Photo, title, building + room, countdown, servings, tags, allergen warning, "I'm heading there" / "It's gone" buttons (owner sees "Mark as gone") |
-| `FilterBar` | Dietary chips (AND filter), "Live now only", "Sort by distance" (geolocation) |
+| `FoodFeed` | Owns filters + view state; renders `MapView`, `PostList`, `FilterBar`, `ImpactBanner`, the new-food alert banner; opens `/?post=<id>` deep links (selects + scrolls to the post) |
+| `MapView` → `FoodMap` | `next/dynamic({ ssr:false })` wrapper around Leaflet; emoji markers; popup with title + countdown; selecting a marker highlights the card; flies to a post **once per selection** (polls don't re-centre the map) |
+| `PostCard` | Photo, title, building + room, countdown, servings, tags, allergen warning, "I'm heading there" / "It's gone" buttons (owner sees "Mark as gone"), **Share** (Web Share API → clipboard → show link). Signals this device sent are remembered in `localStorage` so buttons stay ✓ after a reload |
+| `FilterBar` | Dietary chips (AND filter), "Live now only", "Sort by distance" (geolocation), "Alert me" toggle |
+| `useFoodAlerts` | Alert state, permission request, unseen list, tab-title count (see §5 Food alerts) |
+| `app/manifest.ts` + `public/icon.svg` | Web app manifest so the site can be added to a phone home screen |
 | `PostForm` | Mode tabs (Leftovers now / Event poster / No photo), image picker → resize → `/api/ai/extract` → prefill; AI-suggested fields get an "AI" badge until edited; building `<select>`; safety acknowledgement; submit |
 | `Countdown` | Ticks every second; "Ends in 12m", "Starts in 2h", "Ended" |
-| `usePosts` | Fetch + 5 s poll + refetch on focus/visibility + optional Supabase realtime ping; optimistic signal updates |
+| `usePosts` | Fetch + 5 s poll + refetch on focus/visibility + optional Supabase realtime ping; optimistic signal updates (a poll that started before a signal response is discarded, via `lib/requestSeq.ts`) |
 
 Accessibility: every control is a real `<button>`/`<input>` with a label, colour is never the only signal, and the map has a list equivalent.
 
