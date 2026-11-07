@@ -39,3 +39,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+!.env.example
+
+# local data (memory store, uploaded photos)
+/.data/
+
+# eval outputs + private eval images
+/evals/results/
+/evals/images/*
+!/evals/images/.gitkeep
+
+# claude code local settings
+.claude/settings.local.json

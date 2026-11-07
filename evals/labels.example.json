@@ -1,0 +1,22 @@
+[
+  {
+    "file": "food/pizza-boxes.jpg",
+    "mode": "food",
+    "expected": { "is_food": true, "dietary_tags": ["vegetarian"], "est_servings": 24 }
+  },
+  {
+    "file": "food/empty-table.jpg",
+    "mode": "food",
+    "expected": { "is_food": false }
+  },
+  {
+    "file": "posters/cs-club-social.png",
+    "mode": "poster",
+    "expected": { "is_event_with_food": true, "date": "2026-11-12", "start_time": "18:00", "building_id": "ICCS" }
+  },
+  {
+    "file": "posters/zoom-webinar.png",
+    "mode": "poster",
+    "expected": { "is_event_with_food": false }
+  }
+]
